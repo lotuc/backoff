@@ -1,3 +1,6 @@
+[![Clojars Project](https://img.shields.io/clojars/v/org.lotuc/backoff.svg)](https://clojars.org/org.lotuc/backoff)
+
+
 # backoff
 
 This library mimics the go package
