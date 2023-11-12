@@ -2,7 +2,8 @@
   (:require
    [clojure.core.async :as a]
    [clojure.test :refer :all]
-   [lotuc.backoff :as sut]))
+   [lotuc.backoff :as sut]
+   [lotuc.backoff.protocols :as p]))
 
 (defmacro testing* [ntimes string & body]
   `(testing ~string
@@ -11,7 +12,10 @@
          ~@body))))
 
 (defn- make-test-clock [millis]
-  (reify sut/Clock (now [_] millis)))
+  (reify p/Clock (now [_] millis)))
+
+(defn- test-timer [_t]
+  (a/timeout 0))
 
 (deftest constant-backoff-test
   (testing "nil backoff"
@@ -26,16 +30,18 @@
         (when (< i 3)
           (recur (inc i) (sut/nxt b'))))))
   (testing "Sequence backoff"
-    (let [s (range 5)]
-      (is (nil? (sut/backoff '())))
-      (loop [[s0 & sr] s b s]
-        (is (= s0 (sut/backoff b)))
-        (when sr
-          (recur sr (sut/nxt b)))))))
+    (doseq [b [(range 5)
+               [1 2 3]]]
+      (let [s b]
+        (is (nil? (sut/backoff '())))
+        (loop [[s0 & sr] s b s]
+          (is (= s0 (sut/backoff b)))
+          (when sr
+            (recur sr (sut/nxt b))))))))
 
-(deftest with-retries-test
+(deftest with-max-retries-test
   (testing "With retries"
-    (let [c 2 b (sut/with-retries c 1)]
+    (let [c 2 b (sut/with-max-retries c 1)]
       (is (= 2 (sut/backoff b)))
       (is (nil? (-> b sut/nxt sut/nxt))))))
 
@@ -95,7 +101,7 @@
     (let [n 3
           [retries f] (success-on n)
           [ret _] (sut/retry f (sut/make-exponential-back-off)
-                             {:timer (fn [_] (a/timeout 0))})]
+                             {:timer test-timer})]
       (a/<!! ret)
       (is (= n @retries))))
   (testing "retry<!!"
@@ -103,7 +109,7 @@
           expect 42
           [retries f] (success-on n expect)
           ret (sut/retry<!! f (sut/make-exponential-back-off)
-                            {:timer (fn [_] (a/timeout 0))})]
+                            {:timer test-timer})]
       (is (= n @retries))
       (is (= expect ret)))))
 
@@ -118,7 +124,7 @@
                   (swap! notifies inc))
          [retries f] (success-on n expect)
          ret (sut/retry<!! f (sut/make-exponential-back-off)
-                           {:timer (fn [_] (a/timeout 0))
+                           {:timer test-timer
                             :notify notify})]
      (is (= n @retries))
      (is (= expect ret))
@@ -135,7 +141,7 @@
                 (recur)))
           [retries f] (success-on n expect)
           ret (sut/retry<!! f (sut/make-exponential-back-off)
-                            {:timer (fn [_] (a/timeout 0))
+                            {:timer test-timer
                              :notify notify})]
       (a/close! notify)
       (is (= n @retries))
@@ -156,7 +162,7 @@
                (a/close! ctrl)
                (throw (ex-info "Error" {:i @i}))))
          opts {:ctrl ctrl
-               :timer (fn [_] (a/timeout 0))}]
+               :timer test-timer}]
      (is (thrown? InterruptedException
                   (sut/retry<!! f (sut/make-exponential-back-off)
                                 opts))))))
@@ -189,7 +195,7 @@
                          (f)))
                b (sut/make-exponential-back-off)
                opts {:permanent-error? permanent-error?
-                     :timer (fn [_] (a/timeout 0))}]
+                     :timer test-timer}]
            (try
              (let [r (sut/retry<!! f' b opts)]
                (when res (is (= res r))))
