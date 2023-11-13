@@ -1,7 +1,14 @@
 (ns lotuc.backoff.exponential
+  (:refer-clojure :exclude [bigint])
   (:require
    [lotuc.backoff.protocols :as p]
    [lotuc.backoff.clock :as c]))
+
+(defn- bigint [v]
+  #?(:clj (clojure.core/bigint v)
+     :cljs v))
+
+(def ^:const MAX_LONG 9223372036854775807) ; Long/MAX_VALUE
 
 (defn- calc-exponential-backoff
   [{:keys [randomization-factor multiplier
@@ -13,7 +20,7 @@
               min-interval (- current-interval delta)
               max-interval (+ current-interval delta)]
           (+ min-interval (* random (inc (- max-interval min-interval))))))
-      (min (or max-interval Long/MAX_VALUE))
+      (min (or max-interval MAX_LONG))
       long))
 
 (defrecord ExponentialBackoff [initial-interval
@@ -39,8 +46,8 @@
                       stop))]
       (map->ExponentialBackoff (assoc v' :backoff backoff)))))
 
-(defn make-exponential-back-off
-  ([] (make-exponential-back-off {}))
+(defn make-exponential-backoff
+  ([] (make-exponential-backoff {}))
   ([values-map]
    (-> {:initial-interval     500
         :randomization-factor 0.5

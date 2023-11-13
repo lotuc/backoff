@@ -10,3 +10,6 @@ for v in $versions
 do
   clojure -M:test:"$v"
 done
+
+# ClojureScript
+clojure -M:cljs-test

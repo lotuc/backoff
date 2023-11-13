@@ -1,4 +1,4 @@
-(ns lotuc.backoff.retry
+(ns lotuc.backoff.retry-impl
   (:require
    [clojure.core.async :as a]
    [lotuc.backoff.protocols :as p]))
@@ -9,12 +9,12 @@
         ctrl (or ctrl (a/chan))
         permanent-error? (or permanent-error? (constantly false))
         timer (or timer a/timeout)
-        run! #(a/thread
-                (try [::ok (f)]
-                     (catch Exception e
-                       (if (permanent-error? e)
-                         [::permanent-err e]
-                         [::err e]))))
+        run! #(#?(:clj a/thread :cljs a/go)
+               (try [::ok (f)]
+                    (catch #?(:clj Exception :cljs :default) e
+                      (if (permanent-error? e)
+                        [::permanent-err e]
+                        [::err e]))))
         done (a/go-loop []
                (if-some [[typ d] (a/<! ctrl)]
                  (case typ
@@ -22,7 +22,8 @@
                    ::err (a/>! ret [:err d])
                    ::permanent-err (a/>! ret [:err d])
                    (recur))
-                 (a/>! ret [:err (InterruptedException.)])))]
+                 (a/>! ret [:err #?(:clj (InterruptedException.)
+                                    :cljs (ex-info "interruppted" {:interrupted? true}))])))]
 
     (a/go-loop [b b]
       (when-some [[typ v :as v'] (a/<! (run!))]
@@ -34,7 +35,7 @@
           (if-some [b' (p/nxt b)]
             (do (when notify
                   (if (fn? notify)
-                    (a/thread (notify v b'))
+                    (#?(:clj a/thread :cljs a/go) (notify v b'))
                     (a/>! notify [v b'])))
                 (a/alt!
                   done nil
@@ -69,7 +70,14 @@
   "Blocking wait `retry`'s result."
   ([f b] (retry<!! f b {}))
   ([f b {:keys [notify timer permanent-error? ctrl] :as opts}]
-   (let [[ret ctrl] (retry* f b opts)
-         [typ v] (try (a/<!! ret) (finally (a/close! ctrl)))]
-     (when (= typ :err) (throw v))
-     v)))
+   (let [[ret ctrl] (retry* f b opts)]
+     #?(:clj (let [[typ v] (try (a/<!! ret) (finally (a/close! ctrl)))]
+               (when (= typ :err) (throw v))
+               v)
+        :cljs (js/Promise.
+               (fn [resolve reject]
+                 (a/go
+                   (let [[typ v] (try (a/<! ret) (finally (a/close! ctrl)))]
+                     (if (= typ :err)
+                       (reject v)
+                       (resolve v))))))))))

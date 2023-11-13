@@ -29,7 +29,7 @@ Checkout more use case [here](./test/lotuc/backoff_test.clj).
 (-> '() b/backoff)               ; => nil
 
 ;; exponential backoff
-(def b0 (b/make-exponential-back-off))
+(def b0 (b/make-exponential-backoff))
 [(-> b0 b/backoff) (-> b0 b/nxt b/backoff) (-> b0 b/nxt b/nxt b/backoff)] ; => [503 1099 1128]
 ```
 
@@ -43,7 +43,7 @@ Checkout more use case [here](./test/lotuc/backoff_test.clj).
                    (do (swap! i inc)
                        (throw (ex-info "error" {:i @i})))))
       notify (fn [err b] (println "i:" (:i (ex-data err)) ", backoff:" (b/backoff b)))]
-  (b/retry<!! f (b/make-exponential-back-off) {:notify notify}))
+  (b/retry<!! f (b/make-exponential-backoff) {:notify notify}))
 i: 1 , backoff: 595
 i: 2 , backoff: 1108
 i: 3 , backoff: 2303
