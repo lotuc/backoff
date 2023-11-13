@@ -7,7 +7,7 @@ This library mimics the go package
 
 ## Usage
 
-Checkout more use case [here](./test/lotuc/backoff_test.clj).
+Checkout more use case [here](./test/lotuc/backoff_test.cljc).
 
 ### Backoff
 
