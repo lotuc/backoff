@@ -24,6 +24,7 @@
        :lib lib
        :version version
        :basis basis
+       :src-pom "./pom0.xml"
        :src-dirs ["src"]
        :scm scm}
       b/write-pom)
